@@ -1,20 +1,54 @@
-﻿# STAGE 1: Prepare
+﻿# STAGE 1: Prepare & Build
 FROM node:18-alpine as builder
+
+# Establece directorio de trabajo
 WORKDIR /app
+
+# Copia los archivos de configuración
 COPY package*.json ./
 COPY tsconfig*.json ./
+
+# Instala las dependencias
+RUN npm install
+
+# Copia el resto del código fuente
+COPY . .
+
+# Compila el proyecto
+RUN npm run build
+
+# STAGE 2: Production
+FROM node:18-alpine
+
+# Establece directorio de trabajo
+WORKDIR /app
+
+# Copia los archivos necesarios desde la imagen de build
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+
+# Exponer puerto
+EXPOSE 3000
+
+# Comando por defecto para iniciar la aplicación
+CMD ["node", "dist/main"]
+
+# STAGE 3: Test
+FROM node:18-alpine as test
+
+# Establece directorio de trabajo
+WORKDIR /app
+
+# Copia archivos de configuración y el código fuente
+COPY package*.json ./
+COPY tsconfig*.json ./
+COPY jest.config.ts ./
 COPY .env ./
 COPY src ./src
 
-# STAGE 2: Build
+# Instala dependencias, incluyendo las de desarrollo
 RUN npm install
-RUN npm run build
 
-# STAGE 3: Prod
-FROM node:18-alpine
-WORKDIR /app
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/dist ./dist
-RUN npm install --omit=dev
-EXPOSE 3000
-CMD ["node", "dist/main"]
+# Corre los tests
+RUN npm run test

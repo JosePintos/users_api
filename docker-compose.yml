@@ -3,20 +3,39 @@ version: '3.8'
 services:
   app:
     build: .
+    container_name: user-api
     ports:
       - '3000:3000'
     environment:
-      MONGO_URI: mongodb://mongodb:27017/usersapi
+      - MONGO_URI=${MONGO_URI}
+      - NODE_ENV=production
     depends_on:
       - mongodb
+    restart: unless-stopped
+    env_file:
+      - .env
+
+  test:
+    build:
+      context: .
+      target: test
+    container_name: user-api-tests
+    depends_on:
+      - mongodb
+    environment:
+      - MONGO_URI=${MONGO_URI}
+    env_file:
+      - .env
+    command: ['npm', 'run', 'test']
 
   mongodb:
-    image: mongo
+    image: mongo:6
     container_name: mongodb
     ports:
       - '27017:27017'
     volumes:
       - mongo-data:/data/db
+    restart: unless-stopped
 
 volumes:
   mongo-data:
