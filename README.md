@@ -70,9 +70,11 @@ $ mau deploy
 
 ## Login
 
-To access some resources of the api you need to login with a user that has the proper profile. To do so, first login by making a post request to /auth/login with "email" and "profiles".
-Example:
+To access some resources of the api you need to login with a user that has the proper profile. To do so, first login by making a post request to /auth/login with "email" and "role" in the body.
+Example of the body:
+```
 {
-  "name": "Ana García",
+  "name": "Roberto Perez",
   "role": "ADMIN"
 }
+```
