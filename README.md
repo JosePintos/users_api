@@ -74,7 +74,7 @@ To access some resources of the api you need to login with a user that has the p
 Example of the body:
 ```
 {
-  "name": "Roberto Perez",
+  "email": "roberto@example.com",
   "role": "ADMIN"
 }
 ```
