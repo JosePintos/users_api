@@ -37,6 +37,7 @@ export class UserController {
     return this.userService.createUser(createUserDto);
   }
 
+  @ApiOperation({ summary: 'Obtener una lista de usuarios' })
   @ApiOkResponse({
     description: 'Lista de usuarios filtrada',
     type: [UserDto],

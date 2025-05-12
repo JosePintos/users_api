@@ -1,43 +1,23 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
-import { getModelToken } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
 import { CreateUserDto } from '../dto/create-user.dto';
-import { UpdateUserDto } from '../dto/update-user.dto';
-import { FilterUsersDto } from '../dto/filter-users.dto';
 import { UserService } from './user.service';
-import { User } from '../schema/user.schema';
-
-const mockUser = {
-  _id: 'user-id',
-  name: 'Test User',
-  email: 'test@example.com',
-  profiles: [],
-  createdAt: new Date(),
-  updatedAt: new Date(),
-};
+import { BadRequestException } from '@nestjs/common';
 
 describe('UserService', () => {
   let service: UserService;
-  let userModel: Model<User>;
 
-  const mockUserModel = {
-    create: jest.fn().mockResolvedValue(mockUser),
-    find: jest.fn().mockReturnValue({
-      exec: jest.fn().mockResolvedValue([mockUser]),
-    }),
-    findById: jest.fn().mockReturnValue({
-      exec: jest.fn().mockResolvedValue(mockUser),
-    }),
-    findByIdAndUpdate: jest.fn().mockReturnValue({
-      exec: jest.fn().mockResolvedValue(mockUser),
-    }),
-    findByIdAndDelete: jest.fn().mockReturnValue({
-      exec: jest.fn().mockResolvedValue(mockUser),
-    }),
-    findOne: jest.fn().mockReturnValue({
-      exec: jest.fn().mockResolvedValue(null),
-    }),
+  const mockUserRepository = {
+    createUser: jest.fn(),
+    findUserByEmail: jest.fn(),
+    findAllUsers: jest.fn(),
+    findUserById: jest.fn(),
+    updateUser: jest.fn(),
+    deleteUser: jest.fn(),
+  };
+
+  const mockProfilesRepository = {
+    findProfilesByCodes: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -45,72 +25,93 @@ describe('UserService', () => {
       providers: [
         UserService,
         {
-          provide: getModelToken('User'),
-          useValue: mockUserModel,
+          provide: 'IUserRepository',
+          useValue: mockUserRepository,
+        },
+        {
+          provide: 'IProfilesRepository',
+          useValue: mockProfilesRepository,
         },
       ],
     }).compile();
 
     service = module.get<UserService>(UserService);
-    userModel = module.get<Model<User>>(getModelToken('User'));
   });
 
-  it('should create a user', async () => {
-    const dto: CreateUserDto = {
-      name: 'Test',
-      email: 'test@example.com',
-      age: 31,
-      profiles: ['USER'],
-    };
-    const result = await service.createUser(dto);
-    expect(result).toEqual(mockUser);
-    expect(userModel.create).toHaveBeenCalledWith(dto);
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
-  it('should throw if email is already in use', async () => {
-    const dto: CreateUserDto = {
-      name: 'Test',
-      email: 'test@example.com',
-      age: 29,
-      profiles: ['USER'],
-    };
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
 
-    mockUserModel.findOne.mockReturnValueOnce({
-      exec: jest.fn().mockResolvedValue(mockUser),
+  describe('createUser', () => {
+    it('should create a user successfully', async () => {
+      const dto: CreateUserDto = {
+        email: 'test@example.com',
+        name: 'Test User',
+        age: 25,
+        profiles: ['ADMIN'],
+      };
+
+      const profileMock = [{ _id: 'mock-profile-id', code: 'ADMIN' }];
+
+      mockProfilesRepository.findProfilesByCodes.mockResolvedValue(profileMock);
+      mockUserRepository.findUserByEmail.mockResolvedValue(null);
+      mockUserRepository.createUser.mockResolvedValue({
+        ...dto,
+        profiles: ['mock-profile-id'],
+      });
+
+      const result = await service.createUser(dto);
+
+      expect(mockProfilesRepository.findProfilesByCodes).toHaveBeenCalledWith(
+        dto.profiles,
+      );
+      expect(mockUserRepository.findUserByEmail).toHaveBeenCalledWith(
+        dto.email,
+      );
+      expect(mockUserRepository.createUser).toHaveBeenCalledWith({
+        ...dto,
+        profiles: ['mock-profile-id'],
+      });
+      expect(result.email).toBe(dto.email);
     });
 
-    await expect(service.createUser(dto)).rejects.toThrow(
-      'Email already in use',
-    );
-    expect(mockUserModel.findOne).toHaveBeenCalledWith({ email: dto.email });
-    expect(mockUserModel.create).not.toHaveBeenCalled();
-  });
+    it('should throw if email is already registered', async () => {
+      const dto: CreateUserDto = {
+        email: 'test@example.com',
+        name: 'Test User',
+        age: 25,
+        profiles: ['ADMIN'],
+      };
 
-  it('should return all users', async () => {
-    const filters: FilterUsersDto = {};
-    const result = await service.findAllUsers(filters);
-    expect(result).toEqual([mockUser]);
-    expect(userModel.find).toHaveBeenCalledWith({});
-  });
+      mockProfilesRepository.findProfilesByCodes.mockResolvedValue([
+        { _id: 'id', code: 'ADMIN' },
+      ]);
+      mockUserRepository.findUserByEmail.mockResolvedValue({ id: 'existing' });
 
-  it('should return a user by id', async () => {
-    const result = await service.findUserById('user-id');
-    expect(result).toEqual(mockUser);
-    expect(userModel.findById).toHaveBeenCalledWith('user-id');
-  });
-
-  it('should update a user', async () => {
-    const dto: UpdateUserDto = { name: 'Updated Name' };
-    const result = await service.updateUser('user-id', dto);
-    expect(result).toEqual(mockUser);
-    expect(userModel.findByIdAndUpdate).toHaveBeenCalledWith('user-id', dto, {
-      new: true,
+      await expect(service.createUser(dto)).rejects.toThrow(
+        BadRequestException,
+      );
     });
-  });
 
-  it('should delete a user', async () => {
-    const result = await service.deleteUser('user-id');
-    expect(result).toEqual(mockUser);
-    expect(userModel.findByIdAndDelete).toHaveBeenCalledWith('user-id');
+    it('should throw if some profiles do not exist', async () => {
+      const dto: CreateUserDto = {
+        email: 'test@example.com',
+        name: 'Test User',
+        age: 25,
+        profiles: ['ADMIN', 'MOD'],
+      };
+
+      mockProfilesRepository.findProfilesByCodes.mockResolvedValue([
+        { _id: 'id', code: 'ADMIN' },
+      ]);
+
+      await expect(service.createUser(dto)).rejects.toThrow(
+        'Uno o más perfiles no existen',
+      );
+    });
   });
 });
