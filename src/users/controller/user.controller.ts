@@ -31,7 +31,7 @@ export class UserController {
     status: 400,
     description: 'Error de validación o email duplicado',
   })
-  @Roles(['ADMIN', 'MOD', 'USER'])
+  @Roles([])
   @Post()
   async createUser(@Body() createUserDto: CreateUserDto): Promise<User> {
     return this.userService.createUser(createUserDto);
